@@ -1,0 +1,37 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/mxc/main/schemas/stable/mxc-config.schema.json",
+  "version": "0.6.0-alpha",
+  "containerId": "enclawed-lxc-linux",
+  "containment": "lxc",
+  "platform": "linux",
+  "process": {
+    "commandLine": "/usr/local/bin/enclawed secretary"
+  },
+  "filesystem": {
+    "readonlyPaths": [
+      "/opt/enclawed",
+      "/usr",
+      "/lib",
+      "/lib64",
+      "/etc/ssl/certs",
+      "/etc/resolv.conf"
+    ],
+    "readwritePaths": [
+      "/home/sandbox/.enclawed",
+      "/tmp/enclawed"
+    ],
+    "deniedPaths": [
+      "/root",
+      "/etc/shadow",
+      "/proc/self/environ"
+    ]
+  },
+  "network": {
+    "defaultPolicy": "block",
+    "enforcementMode": "firewall",
+    "allowedHosts": [
+      "api.anthropic.com",
+      "127.0.0.1"
+    ]
+  }
+}

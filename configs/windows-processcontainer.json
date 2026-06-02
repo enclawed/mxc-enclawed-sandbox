@@ -1,0 +1,28 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/mxc/main/schemas/stable/mxc-config.schema.json",
+  "version": "0.6.0-alpha",
+  "containerId": "enclawed-processcontainer-windows",
+  "containment": "processcontainer",
+  "platform": "windows",
+  "process": {
+    "commandLine": "node %USERPROFILE%\\.enclawed\\enclawed-oss\\enclawed.mjs secretary"
+  },
+  "filesystem": {
+    "readonlyPaths": [
+      "%USERPROFILE%\\.enclawed\\enclawed-oss",
+      "%ProgramFiles%\\nodejs"
+    ],
+    "readwritePaths": [
+      "%USERPROFILE%\\.enclawed\\enclawed-apps",
+      "%TEMP%\\enclawed"
+    ]
+  },
+  "network": {
+    "defaultPolicy": "block",
+    "enforcementMode": "firewall",
+    "allowedHosts": [
+      "api.anthropic.com",
+      "127.0.0.1"
+    ]
+  }
+}

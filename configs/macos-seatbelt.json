@@ -1,0 +1,28 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/mxc/main/schemas/dev/mxc-config.schema.json",
+  "version": "0.6.0-alpha",
+  "containerId": "enclawed-seatbelt-macos",
+  "containment": "seatbelt",
+  "platform": "macos",
+  "process": {
+    "commandLine": "node $HOME/.enclawed/enclawed-oss/enclawed.mjs secretary"
+  },
+  "filesystem": {
+    "readonlyPaths": [
+      "$HOME/.enclawed/enclawed-oss",
+      "/usr/local/lib/node_modules"
+    ],
+    "readwritePaths": [
+      "$HOME/.enclawed/enclawed-apps",
+      "/tmp/enclawed"
+    ]
+  },
+  "network": {
+    "defaultPolicy": "block",
+    "enforcementMode": "firewall",
+    "allowedHosts": [
+      "api.anthropic.com",
+      "127.0.0.1"
+    ]
+  }
+}
