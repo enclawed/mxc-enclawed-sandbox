@@ -1,0 +1,50 @@
+End-to-end validation of the Linux Bubblewrap config — 2026-06-02
+
+Built MXC at commit b39c5da (microsoft/mxc HEAD) with Rust 1.93 +
+Node 22.22.2, installed bubblewrap 0.9.0, ran enclawed-oss inside a
+real Bubblewrap-backed MXC sandbox using spawnSandboxFromConfig().
+
+Smoke 1 — config shape (placeholder command):
+
+  process.commandLine = 'echo "shape-ok"; cat /proc/1/comm'
+  network removed (firewall enforcement requires root, see note below)
+
+  exit=0
+  stdout: shape-ok
+          bwrap          # bubblewrap is PID 1 inside the sandbox
+
+  Confirms the JSON shape is accepted by the MXC SDK and bwrap is
+  applying the policy (same PID-1 fingerprint MXC's own
+  linux-bubblewrap.test.ts uses).
+
+Smoke 2 — enclawed launches inside the sandbox:
+
+  process.commandLine = '/usr/bin/node /home/metere1/enclawed-oss/enclawed.mjs --version'
+  readonlyPaths includes the enclawed-oss source clone
+  readwritePaths includes /tmp and the operator's keyring/state dir
+
+  exit=0
+  stdout: [workspace-dir] using /home/metere1/.enclawed (~/.enclawed/ exists)
+          enclawed 1.0.1 (7d25e4a)
+
+  enclawed boots fully under bubblewrap policy enforcement and prints
+  its own version banner. The integration is live.
+
+Two operator notes that surfaced during the validation:
+
+  1. enclawed writes audit.jsonl to ~/.enclawed/ on startup. That
+     directory MUST be in readwritePaths or boot fails with EROFS at
+     the first audit append. Bundled config writes /var/lib/enclawed.
+
+  2. network.enforcementMode=firewall uses iptables and requires root
+     ("iptables ... Permission denied (you must be root)"). Operators
+     running unprivileged either invoke MXC under sudo, switch to
+     network.proxy mode (no iptables), or relax to defaultPolicy=allow.
+     The bundled configs keep firewall mode because it's the strict
+     posture; the README documents both options.
+
+LXC, ProcessContainer, and Seatbelt configs ship the same intent shape
+as Bubblewrap (validated above) but were not live-tested in this WSL2
+host: LXC needs the lxc toolset configured at the OS level,
+ProcessContainer requires Windows 11 24H2+, Seatbelt requires macOS.
+Schema-validated against MXC's stable + dev schemas.

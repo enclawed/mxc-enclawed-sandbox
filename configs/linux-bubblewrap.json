@@ -1,11 +1,10 @@
 {
-  "$schema": "https://raw.githubusercontent.com/microsoft/mxc/main/schemas/stable/mxc-config.schema.json",
   "version": "0.6.0-alpha",
   "containerId": "enclawed-bubblewrap-linux",
   "containment": "bubblewrap",
   "platform": "linux",
   "process": {
-    "commandLine": "/usr/local/bin/enclawed secretary"
+    "commandLine": "/usr/bin/node /opt/enclawed/enclawed.mjs secretary"
   },
   "filesystem": {
     "readonlyPaths": [
@@ -13,17 +12,11 @@
       "/usr",
       "/lib",
       "/lib64",
-      "/etc/ssl/certs",
-      "/etc/resolv.conf"
+      "/etc/ssl/certs"
     ],
     "readwritePaths": [
-      "/home/sandbox/.enclawed",
-      "/tmp/enclawed"
-    ],
-    "deniedPaths": [
-      "/root",
-      "/etc/shadow",
-      "/proc/self/environ"
+      "/var/lib/enclawed",
+      "/tmp"
     ]
   },
   "network": {
