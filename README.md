@@ -53,20 +53,34 @@ The same shape applies on Windows (`%ProgramFiles%\Enclawed` ro, `%USERPROFILE%\
 
 ## Network policy caveat
 
-The bundled configs ship `network.defaultPolicy: "block"` plus `enforcementMode: "firewall"` with an allow-list. **`firewall` mode uses iptables and requires root** — running an MXC sandbox as an unprivileged operator with this enforcement mode will fail at startup with `iptables ... Permission denied (you must be root)`.
+The bundled configs ship `network.defaultPolicy: "block"` plus `enforcementMode: "firewall"` with an allow-list. Two known frictions:
 
-Three ways forward:
+1. **`firewall` mode uses iptables and requires root.** Running unprivileged fails at startup with `iptables ... Permission denied (you must be root)`.
+2. **Firewall mode currently rejects IPv6-resolved hosts.** Any `allowedHost` whose DNS returns AAAA records (e.g. `api.anthropic.com`) crashes MXC at policy-install time because it calls `iptables` (IPv4 only) for both A and AAAA results. Tracked as [microsoft/mxc#479](https://github.com/microsoft/mxc/issues/479). Until that lands:
+    - Switch `enforcementMode` to `proxy` and route outbound HTTP through an MXC-launched HTTP proxy. No iptables, no IPv6 issue, no root.
+    - Or drop the firewall (`defaultPolicy: "allow"`) and rely entirely on Enclawed's own internal egress allowlist (`enforceAllowlists=true` in the framework policy). Defensible because Enclawed already enforces its egress allowlist at the MCP boundary; the MXC firewall is defense in depth, not the only line.
+    - Or restrict `allowedHosts` to IPv4-only literals (`140.82.114.*` style) — clunky but unblocks the iptables path.
 
-1. Invoke the SDK driver under `sudo` if you need iptables-level enforcement.
-2. Switch `enforcementMode` to `proxy` and route outbound HTTP through an MXC-launched HTTP proxy (`network.proxy.builtinTestServer = true` for a built-in stub, or your own proxy URL). No root required.
-3. Drop the firewall (`defaultPolicy: "allow"`) and rely entirely on Enclawed's own internal egress allowlist (`enforceAllowlists=true` in the framework policy). Defensible because Enclawed already enforces its egress allowlist at the MCP boundary; the MXC firewall is defense in depth, not the only line.
+## LXC host setup
+
+The LXC config requires unprivileged-LXC host configuration before MXC can dispatch into it (otherwise `lxc-create` fails with `No uid mapping for container root`). One-time operator setup:
+
+```bash
+sudo apt install lxc lxc-templates uidmap
+mkdir -p ~/.config/lxc && cp /etc/lxc/default.conf ~/.config/lxc/
+# Add subuid/subgid mappings per the LXC docs, then:
+echo "$USER veth lxcbr0 10" | sudo tee -a /etc/lxc/lxc-usernet
+```
+
+After that, MXC will spawn LXC containers from the bundled config without further intervention.
 
 ## Live validation status
 
 | Platform | Backend | Status |
 |---|---|---|
-| Linux | Bubblewrap | Live e2e: `enclawed 1.0.1 (7d25e4a)` printed from inside the sandbox. See `mxc-validation.txt`. |
-| Linux | LXC | Schema-validated; not live-tested (needs `lxc` toolset configured). |
+| Linux | Bubblewrap (no firewall) | Live e2e: `enclawed 1.0.1 (7d25e4a)` printed from inside the sandbox. See `mxc-validation.txt`. |
+| Linux | Bubblewrap + firewall | Config-shape accepted under sudo; blocked by [microsoft/mxc#479](https://github.com/microsoft/mxc/issues/479) (iptables + IPv6). Workarounds documented above. |
+| Linux | LXC | Config accepted by MXC's LXC dispatch; remaining failure is unprivileged-LXC host setup. See `mxc-validation.txt`. |
 | Windows | ProcessContainer | Schema-validated; not live-tested in WSL2 (requires Windows 11 24H2+). |
 | macOS | Seatbelt | Schema-validated; not live-tested in WSL2 (requires macOS). |
 

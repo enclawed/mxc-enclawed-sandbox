@@ -1,50 +1,82 @@
-End-to-end validation of the Linux Bubblewrap config — 2026-06-02
+End-to-end validation against microsoft/mxc HEAD — 2026-06-02
 
-Built MXC at commit b39c5da (microsoft/mxc HEAD) with Rust 1.93 +
-Node 22.22.2, installed bubblewrap 0.9.0, ran enclawed-oss inside a
-real Bubblewrap-backed MXC sandbox using spawnSandboxFromConfig().
+Setup: built MXC from source with Rust 1.93 + Node 22.22.2 + bubblewrap
+0.9.0 + lxc tooling, ran enclawed-oss inside the SDK-managed sandbox
+via spawnSandboxFromConfig().
 
-Smoke 1 — config shape (placeholder command):
+=== MXC SDK test suite ===
 
-  process.commandLine = 'echo "shape-ok"; cat /proc/1/comm'
-  network removed (firewall enforcement requires root, see note below)
+Unit tests:    149 passed, 1 failed (pre-existing MXC bug — the failing
+               case is microsoft/mxc's own test that asserts "LXC should
+               NOT require experimental mode," which fires when LXC
+               isn't installed at the host level; unrelated to this
+               integration)
+Integration:   17 passed, 0 failed. The Bubblewrap proxy-mode
+               network test (Bubblewrap with HTTP proxy enforcement,
+               no iptables, no root) passed live in ~10.8s.
+               The Linux Bubblewrap firewall-mode tests + LXC tests
+               were skipped because they require root.
 
-  exit=0
-  stdout: shape-ok
-          bwrap          # bubblewrap is PID 1 inside the sandbox
-
-  Confirms the JSON shape is accepted by the MXC SDK and bwrap is
-  applying the policy (same PID-1 fingerprint MXC's own
-  linux-bubblewrap.test.ts uses).
-
-Smoke 2 — enclawed launches inside the sandbox:
+=== Enclawed under MXC Bubblewrap, no network firewall ===
 
   process.commandLine = '/usr/bin/node /home/metere1/enclawed-oss/enclawed.mjs --version'
-  readonlyPaths includes the enclawed-oss source clone
-  readwritePaths includes /tmp and the operator's keyring/state dir
+  readonlyPaths = ['/home/metere1/enclawed-oss','/usr','/lib','/lib64','/etc/ssl/certs']
+  readwritePaths = ['/tmp','/home/metere1/.enclawed']
+  network removed (firewall enforcement requires root)
 
   exit=0
   stdout: [workspace-dir] using /home/metere1/.enclawed (~/.enclawed/ exists)
           enclawed 1.0.1 (7d25e4a)
 
-  enclawed boots fully under bubblewrap policy enforcement and prints
-  its own version banner. The integration is live.
+  → Enclawed boots fully under bubblewrap policy enforcement and prints
+    its own version banner. Integration is live on the Bubblewrap path
+    without firewall enforcement.
 
-Two operator notes that surfaced during the validation:
+=== Enclawed under MXC Bubblewrap, firewall enforcement (sudo) ===
 
-  1. enclawed writes audit.jsonl to ~/.enclawed/ on startup. That
-     directory MUST be in readwritePaths or boot fails with EROFS at
-     the first audit append. Bundled config writes /var/lib/enclawed.
+Same shape as above but with the bundled network policy applied
+(defaultPolicy=block, enforcementMode=firewall, allowedHosts=
+[api.anthropic.com, 127.0.0.1]). Ran as `sudo node ...`.
 
-  2. network.enforcementMode=firewall uses iptables and requires root
-     ("iptables ... Permission denied (you must be root)"). Operators
-     running unprivileged either invoke MXC under sudo, switch to
-     network.proxy mode (no iptables), or relax to defaultPolicy=allow.
-     The bundled configs keep firewall mode because it's the strict
-     posture; the README documents both options.
+  exit=255
+  stderr: Bubblewrap: network policy error: iptables -A MXC-enclawed-
+          bubblewrap- -d 2607:6bc0::10 -j ACCEPT failed: iptables
+          v1.8.10 (nf_tables): host/network '2607:6bc0::10' not found
 
-LXC, ProcessContainer, and Seatbelt configs ship the same intent shape
-as Bubblewrap (validated above) but were not live-tested in this WSL2
-host: LXC needs the lxc toolset configured at the OS level,
-ProcessContainer requires Windows 11 24H2+, Seatbelt requires macOS.
-Schema-validated against MXC's stable + dev schemas.
+  → MXC bug, not config-shape. `iptables` (IPv4 only) cannot accept
+    the IPv6 address `2607:6bc0::10` that api.anthropic.com resolves
+    to via its AAAA records. Filed upstream as
+    microsoft/mxc#479 (Bubblewrap network firewall mode rejects
+    IPv6-resolved hosts). Workarounds documented in the README:
+    enforcementMode=proxy, or rely on enclawed's own egress
+    allowlist with defaultPolicy=allow.
+
+=== Enclawed under MXC LXC ===
+
+Updated config now includes the required nested `lxc:` block
+(distribution=alpine, release=3.23) and `lifecycle.destroyOnExit`.
+With those in place the SDK correctly dispatches to `lxc-create`:
+
+  Failed to create container: lxc-create failed: lxc-create:
+  enclawed-lxc-linux: Failed to open file "/home/metere1/.config/lxc/
+  default.conf"; No uid mapping for container root
+
+  → Config shape is now accepted by MXC's LXC backend (the earlier
+    "distribution and release are required" error is gone). The remaining
+    failure is standard unprivileged-LXC host setup — operators run
+    once: `mkdir -p ~/.config/lxc && cp /etc/lxc/default.conf ~/.config/lxc/`
+    plus subuid/subgid mappings per the LXC docs. Out of scope for
+    this repo; documented in the README.
+
+=== Summary ===
+
+Backend            Status
+─────────────      ─────────────────────────────────────────────
+Bubblewrap         Live e2e: enclawed booted, version printed, exit 0
+Bubblewrap+fw      Blocked by MXC#479 (IPv6 + iptables); workaround
+                   documented (proxy mode, or rely on enclawed's
+                   own egress allowlist)
+LXC                Config shape validated against MXC's LXC dispatch;
+                   needs unprivileged-LXC host setup to run end-to-end
+ProcessContainer   Requires Windows 11 24H2+; not testable on this host
+Seatbelt           Requires macOS; not testable on this host

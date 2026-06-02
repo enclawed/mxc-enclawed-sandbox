@@ -3,6 +3,13 @@
   "containerId": "enclawed-lxc-linux",
   "containment": "lxc",
   "platform": "linux",
+  "lxc": {
+    "distribution": "alpine",
+    "release": "3.23"
+  },
+  "lifecycle": {
+    "destroyOnExit": true
+  },
   "process": {
     "commandLine": "/usr/bin/node /opt/enclawed/enclawed.mjs secretary"
   },
